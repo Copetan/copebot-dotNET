@@ -2,7 +2,7 @@
 
 namespace CopebotNET
 {
-    class Program
+    class Bot
     {
         public static void Main() {
             Console.WriteLine("Hello World!");
