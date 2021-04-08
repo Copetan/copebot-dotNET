@@ -1,0 +1,5 @@
+{
+    # Replace the string in the "token" entry with the token you got from the bot app
+    "token": "example"
+    "prefix": "!!"
+}
