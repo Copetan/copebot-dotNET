@@ -1,0 +1,9 @@
+# This is the config file for everything that this bot will use
+# Remove ".example" from this file's name to be able to use this config
+
+[botConfig]
+token = "example"
+activity.name = "example"
+# This is a long of the DSharpPlus.Entities.ActivityType enum
+activity.type = 0
+prefix = "!!"
