@@ -1,60 +1,96 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
+using CopebotNET.Commands;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Extensions.Logging;
 using Tomlyn;
 using Tomlyn.Model;
 
 namespace CopebotNET
 {
-    class CopebotNet
+    public class CopebotNet : IDisposable
     {
-        private DiscordConfiguration Config { get; set; }
+        public static bool Restart { get; set; }
         
-        private DiscordActivity Activity { get; set; }
-        
-        private CommandsNextConfiguration CommandsConfig { get; set; }
-        
-        private DiscordClient Client { get; set; }
-        
-        private CommandsNextExtension Commands { get; set; }
+        private readonly DiscordActivity _activity;
+        private readonly DiscordClient _client;
 
         public static void Main() {
-            var bot = new CopebotNet();
+            Log.Logger = new LoggerConfiguration()
+                .WriteTo.Console()
+                .CreateLogger();
 
-            bot.Run().GetAwaiter().GetResult();
+            do {
+                var source = new CancellationTokenSource();
+                var bot = new CopebotNet(source);
+
+                bot.Run(source).GetAwaiter().GetResult();
+                bot.Dispose();
+                if (Restart)
+                    Log.Information("Bot restarting");
+            } while (Restart);
+            
+            Log.Information("Exiting application, goodbye!");
         }
 
-        public CopebotNet() {
+        private CopebotNet(CancellationTokenSource tokenSource) {
             var toml = File.ReadAllText("config/config.toml");
             var config = Toml.Parse(toml).ToModel();
+            var loggerFactory = new SerilogLoggerFactory();
 
-            Config = new DiscordConfiguration {
+            var config1 = new DiscordConfiguration {
                 Token = (string) ((TomlTable)config["botConfig"])["token"],
-                Intents = DiscordIntents.AllUnprivileged | DiscordIntents.AllUnprivileged
+                Intents = (DiscordIntents)(long) ((TomlTable)config["botConfig"])["intents"],
+                LoggerFactory = loggerFactory
             };
             
             var activityTable = (TomlTable) ((TomlTable) config["botConfig"])["activity"];
-            Activity = new DiscordActivity((string) activityTable["name"], (ActivityType)(long) activityTable["type"]);
+            _activity = new DiscordActivity((string) activityTable["name"], (ActivityType)(long) activityTable["type"]);
+
+            var services = new ServiceCollection()
+                .AddSingleton(tokenSource)
+                .BuildServiceProvider();
             
             var commandsTable = (TomlTable) ((TomlTable) config["botConfig"])["commands"];
-            CommandsConfig = new CommandsNextConfiguration {
+            var commandsConfig = new CommandsNextConfiguration {
                 StringPrefixes = new List<string> {(string) commandsTable["prefix"]},
                 EnableMentionPrefix = (bool) commandsTable["enableMention"],
-                EnableDms = (bool) commandsTable["enableDms"]
+                EnableDms = (bool) commandsTable["enableDms"],
+                Services = services
             };
 
-            Client = new DiscordClient(Config);
+            _client = new DiscordClient(config1);
 
-            Commands = Client.UseCommandsNext(CommandsConfig);
+            var commands = _client.UseCommandsNext(commandsConfig);
+            
+            commands.RegisterCommands<UngroupedCommands>();
+            commands.RegisterCommands<SelfCommands>();
         }
 
-        public async Task Run() {
-            await Client.ConnectAsync(Activity);
+        private async Task Run(CancellationTokenSource source) {
+            await _client.ConnectAsync(_activity);
 
-            await Task.Delay(-1);
+            try {
+                await Task.Delay(-1, source.Token);
+            }
+            catch (TaskCanceledException) {
+                Log.Information("Bot task cancelled");
+            }
+            finally {
+                source.Dispose();
+            }
+        }
+
+        public void Dispose() {
+            _client?.Dispose();
         }
     }
 }

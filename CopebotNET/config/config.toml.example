@@ -3,7 +3,15 @@
 
 [botConfig]
 token = "example"
-activity.name = "example"
-# This is a long of the DSharpPlus.Entities.ActivityType enum
-activity.type = 0
-prefix = "!!"
+# This is a long of the DSharpPlus.DiscordIntents enum
+intents = 0
+
+    [botConfig.activity]
+    name = "Hello, world!"
+    # This is a long of the DSharpPlus.Entities.ActivityType enum
+    type = 0
+    
+    [botConfig.commands]
+    prefix = "!!"
+    enableMention = true
+    enableDms = true
