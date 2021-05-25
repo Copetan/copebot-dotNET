@@ -8,7 +8,6 @@ using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Extensions.Logging;
 using Tomlyn;
@@ -18,10 +17,49 @@ namespace CopebotNET
 {
     public class CopebotNet : IDisposable
     {
-        public static bool Restart { get; set; }
-        
         private readonly DiscordActivity _activity;
         private readonly DiscordClient _client;
+
+        private CopebotNet(CancellationTokenSource tokenSource) {
+            var toml = File.ReadAllText("config/config.toml");
+            var config = Toml.Parse(toml).ToModel();
+            var loggerFactory = new SerilogLoggerFactory();
+
+            var config1 = new DiscordConfiguration {
+                Token = (string) ((TomlTable) config["botConfig"])["token"],
+                Intents = (DiscordIntents) (long) ((TomlTable) config["botConfig"])["intents"],
+                LoggerFactory = loggerFactory
+            };
+
+            var activityTable = (TomlTable) ((TomlTable) config["botConfig"])["activity"];
+            _activity = new DiscordActivity((string) activityTable["name"],
+                (ActivityType) (long) activityTable["type"]);
+
+            var services = new ServiceCollection()
+                .AddSingleton(tokenSource)
+                .BuildServiceProvider();
+
+            var commandsTable = (TomlTable) ((TomlTable) config["botConfig"])["commands"];
+            var commandsConfig = new CommandsNextConfiguration {
+                StringPrefixes = new List<string> {(string) commandsTable["prefix"]},
+                EnableMentionPrefix = (bool) commandsTable["enableMention"],
+                EnableDms = (bool) commandsTable["enableDms"],
+                Services = services
+            };
+
+            _client = new DiscordClient(config1);
+
+            var commands = _client.UseCommandsNext(commandsConfig);
+
+            commands.RegisterCommands<UngroupedCommands>();
+            commands.RegisterCommands<SelfCommands>();
+        }
+
+        public static bool Restart { get; set; }
+
+        public void Dispose() {
+            _client?.Dispose();
+        }
 
         public static void Main() {
             Log.Logger = new LoggerConfiguration()
@@ -37,42 +75,8 @@ namespace CopebotNET
                 if (Restart)
                     Log.Information("Bot restarting");
             } while (Restart);
-            
+
             Log.Information("Exiting application, goodbye!");
-        }
-
-        private CopebotNet(CancellationTokenSource tokenSource) {
-            var toml = File.ReadAllText("config/config.toml");
-            var config = Toml.Parse(toml).ToModel();
-            var loggerFactory = new SerilogLoggerFactory();
-
-            var config1 = new DiscordConfiguration {
-                Token = (string) ((TomlTable)config["botConfig"])["token"],
-                Intents = (DiscordIntents)(long) ((TomlTable)config["botConfig"])["intents"],
-                LoggerFactory = loggerFactory
-            };
-            
-            var activityTable = (TomlTable) ((TomlTable) config["botConfig"])["activity"];
-            _activity = new DiscordActivity((string) activityTable["name"], (ActivityType)(long) activityTable["type"]);
-
-            var services = new ServiceCollection()
-                .AddSingleton(tokenSource)
-                .BuildServiceProvider();
-            
-            var commandsTable = (TomlTable) ((TomlTable) config["botConfig"])["commands"];
-            var commandsConfig = new CommandsNextConfiguration {
-                StringPrefixes = new List<string> {(string) commandsTable["prefix"]},
-                EnableMentionPrefix = (bool) commandsTable["enableMention"],
-                EnableDms = (bool) commandsTable["enableDms"],
-                Services = services
-            };
-
-            _client = new DiscordClient(config1);
-
-            var commands = _client.UseCommandsNext(commandsConfig);
-            
-            commands.RegisterCommands<UngroupedCommands>();
-            commands.RegisterCommands<SelfCommands>();
         }
 
         private async Task Run(CancellationTokenSource source) {
@@ -87,10 +91,6 @@ namespace CopebotNET
             finally {
                 source.Dispose();
             }
-        }
-
-        public void Dispose() {
-            _client?.Dispose();
         }
     }
 }

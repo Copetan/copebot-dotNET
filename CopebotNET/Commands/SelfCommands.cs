@@ -11,13 +11,12 @@ namespace CopebotNET.Commands
     [RequireOwner]
     public class SelfCommands : BaseCommandModule
     {
-
-        private CancellationTokenSource _source;
+        private readonly CancellationTokenSource _source;
 
         public SelfCommands(CancellationTokenSource source) {
             _source = source;
         }
-        
+
         [Command("shutdown")]
         [Description("Shuts down the bot")]
         public async Task Shutdown(CommandContext context) {
