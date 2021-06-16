@@ -21,7 +21,6 @@ namespace CopebotNET.Commands
         [Description("Shuts down the bot")]
         public async Task Shutdown(CommandContext context) {
             await context.RespondAsync("Shutting down bot. Goodbye!");
-            await context.Client.DisconnectAsync();
             CopebotNet.Restart = false;
             _source.Cancel();
         }
@@ -30,7 +29,6 @@ namespace CopebotNET.Commands
         [Description("Restarts the bot")]
         public async Task Restart(CommandContext context) {
             await context.RespondAsync("Restarting bot. See you later!");
-            await context.Client.DisconnectAsync();
             CopebotNet.Restart = true;
             _source.Cancel();
         }
